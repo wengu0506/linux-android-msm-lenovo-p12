@@ -41,34 +41,27 @@ jobs:
 
     - name: 4. 正式开始多线程全速编译
       run: |
-        # 挂载我们刚才下载的原生 AOSP 工具链到系统环境变量 (完全对应大佬的配置)
         export PATH="$GITHUB_WORKSPACE/toolchains/clang/clang-r353983c/bin:$GITHUB_WORKSPACE/toolchains/gcc-arm64/bin:$PATH"
 
-        # 导出高通内核标准的编译参数
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-android-
         export CLANG_TRIPLE=aarch64-linux-gnu-
-        # 注意：AOSP 工具链里的名字直接叫 clang，不需要加 -9
         export CC="ccache clang"
         export LD=aarch64-linux-android-ld.bfd
 
-        # 打印一下版本，确保工具链挂载成功
-        clang --version
-
-        # 创建输出文件夹
-        mkdir -p out
-        
         echo "=> 第一步：生成 TB371FC 专属配置文件..."
-        make -j$(nproc) V=1 O=out CROSS_COMPILE=$CROSS_COMPILE CLANG_TRIPLE=$CLANG_TRIPLE ARCH=$ARCH CC="$CC" vendor/tb371fc_defconfig
+        # 移除 O=out，直接在源码根目录原地生成配置
+        make -j$(nproc) V=1 CROSS_COMPILE=$CROSS_COMPILE CLANG_TRIPLE=$CLANG_TRIPLE ARCH=$ARCH CC="$CC" vendor/tb371fc_defconfig
 
         echo "=> 第二步：开始编译内核与设备树..."
-        make -j$(nproc) V=1 O=out CROSS_COMPILE=$CROSS_COMPILE CLANG_TRIPLE=$CLANG_TRIPLE ARCH=$ARCH CC="$CC" LD=$LD
+        # 移除 O=out，开始原地全速编译
+        make -j$(nproc) V=1 CROSS_COMPILE=$CROSS_COMPILE CLANG_TRIPLE=$CLANG_TRIPLE ARCH=$ARCH CC="$CC" LD=$LD
 
     - name: 5. 自动打包并上传战利品
       uses: actions/upload-artifact@v4
       with:
         name: TB371FC-Kernel-Image-and-DTB
         path: |
-          out/arch/arm64/boot/Image
-          out/arch/arm64/boot/dts/qcom/*.dtb
+          arch/arm64/boot/Image
+          arch/arm64/boot/dts/qcom/*.dtb
         compression-level: 9
