@@ -6,7 +6,7 @@ on:
 
 jobs:
   build-kernel:
-    runs-on: ubuntu-20.04 # 锁定 20.04 版本，因为它的软件源里默认带有 clang-9
+    runs-on: ubuntu-22.04 # 锁定 20.04 版本，因为它的软件源里默认带有 clang-9
 
     steps:
     - name: 1. 检出目标分支代码
