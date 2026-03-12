@@ -1,0 +1,50 @@
+name: Build TB371FC Kernel (ila-embsys)
+
+# 触发条件：手动点击执行
+on:
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-20.04 # 锁定 20.04 版本，因为它的软件源里默认带有 clang-9
+
+    steps:
+    - name: 1. 检出目标分支代码
+      uses: actions/checkout@v4
+      with:
+        ref: tb371fc # 强制拉取 tb371fc 分支，而不是 master
+
+    - name: 2. 安装云端替代工具链与依赖
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential bc kmod cpio flex libncurses5-dev libelf-dev libssl-dev dwarves bison ccache
+        # 用 Ubuntu 原生的 clang-9 和 GNU 交叉编译链，完美替代联想那几个 GB 的官方预编译包
+        sudo apt-get install -y clang-9 gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+
+    - name: 3. 执行作者的极速编译指令
+      run: |
+        # 建立编译输出目录
+        mkdir -p out
+        
+        # 环境变量映射：把作者的 android 前缀替换为系统自带的 gnu 前缀
+        export ARCH=arm64
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export CLANG_TRIPLE=aarch64-linux-gnu-
+        export CC="ccache clang-9"
+        export LD=aarch64-linux-gnu-ld.bfd
+
+        echo "=> 开始生成 TB371FC 配置文件..."
+        make -j$(nproc) V=1 O=out CROSS_COMPILE=$CROSS_COMPILE CLANG_TRIPLE=$CLANG_TRIPLE ARCH=$ARCH CC="$CC" vendor/tb371fc_defconfig
+
+        echo "=> 正式开始多线程编译内核..."
+        # 严格沿用作者的 make 参数逻辑
+        make -j$(nproc) V=1 O=out CROSS_COMPILE=$CROSS_COMPILE CLANG_TRIPLE=$CLANG_TRIPLE ARCH=$ARCH CC="$CC" LD=$LD
+
+    - name: 4. 打包并上传编译产物
+      uses: actions/upload-artifact@v4
+      with:
+        name: TB371FC-Kernel-Image-and-DTB
+        path: |
+          out/arch/arm64/boot/Image
+          out/arch/arm64/boot/dts/qcom/*.dtb
+        compression-level: 9
