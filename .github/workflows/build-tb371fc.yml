@@ -1,66 +1,48 @@
-name: Build TB371FC Kernel (Pro Edition)
+name: Build TB371FC Kernel (Android)
 
-# 手动触发开关
 on:
   workflow_dispatch:
 
 jobs:
   build-kernel:
-    runs-on: ubuntu-22.04 # 使用最新且速度最快的服务器
+    runs-on: ubuntu-22.04
 
     steps:
-    - name: 1. 检出大佬的代码
+    - name: 1. 检出当前分支代码 (自动识别当前分支)
       uses: actions/checkout@v4
-      with:
-        # 注意：这里请确保分支名写对了！如果是那个桌面版分支，填 tb371fc-desktop-linux
-        ref: tb371fc
 
-    - name: 2. 配置无敌的底层编译环境 (Python2 + 核心依赖)
+    - name: 2. 配置底层编译环境 (Python2 + 核心依赖)
       run: |
         sudo apt-get update
-        # 安装必备的系统级核心编译包
-        sudo apt-get install -y build-essential bc kmod cpio flex libncurses5-dev libelf-dev libssl-dev dwarves bison ccache curl wget git
-        
-        # 【填坑关键】高通 870 (内核 4.19) 的很多打包脚本死活只认 Python 2
-        # 我们强行安装 python2，并将系统的 python 指令硬链接到 python2 上
-        sudo apt-get install -y python2 python2-dev
+        sudo apt-get install -y build-essential bc kmod cpio flex libncurses5-dev libelf-dev libssl-dev dwarves bison ccache curl wget git python2 python2-dev
         sudo ln -sf /usr/bin/python2 /usr/bin/python
 
-    - name: 3. 拉取纯正的 AOSP 交叉编译工具链 (完美还原大佬环境)
+    - name: 3. 拉取纯正的 AOSP 交叉编译工具链
       run: |
         mkdir -p $GITHUB_WORKSPACE/toolchains
         cd $GITHUB_WORKSPACE/toolchains
-
-        # 直接从 Google 服务器拉取大佬本地同款的 Clang-9.0.3 (r353983c)
-        echo "=> 正在拉取 AOSP Clang..."
         git clone --depth=1 -b android-10.0.0_r47 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang
-
-        # 拉取配套的 GCC 4.9 (用于补齐 ld 链接器和 libgcc)
-        echo "=> 正在拉取 AOSP GCC-4.9..."
         git clone --depth=1 -b android-10.0.0_r47 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 gcc-arm64
 
     - name: 4. 正式开始多线程全速编译
       run: |
         export PATH="$GITHUB_WORKSPACE/toolchains/clang/clang-r353983c/bin:$GITHUB_WORKSPACE/toolchains/gcc-arm64/bin:$PATH"
-
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-android-
         export CLANG_TRIPLE=aarch64-linux-gnu-
         export CC="ccache clang"
         export LD=aarch64-linux-android-ld.bfd
 
-        echo "=> 第一步：生成 TB371FC 专属配置文件..."
-        # 移除 O=out，直接在源码根目录原地生成配置
+        echo "=> 第一步：生成 Android 专属配置文件..."
         make -j$(nproc) V=1 CROSS_COMPILE=$CROSS_COMPILE CLANG_TRIPLE=$CLANG_TRIPLE ARCH=$ARCH CC="$CC" vendor/tb371fc_defconfig
 
-        echo "=> 第二步：开始编译内核与设备树..."
-        # 移除 O=out，开始原地全速编译
+        echo "=> 第二步：开始编译..."
         make -j$(nproc) V=1 CROSS_COMPILE=$CROSS_COMPILE CLANG_TRIPLE=$CLANG_TRIPLE ARCH=$ARCH CC="$CC" LD=$LD
 
     - name: 5. 自动打包并上传战利品
       uses: actions/upload-artifact@v4
       with:
-        name: TB371FC-Kernel-Image-and-DTB
+        name: TB371FC-Android-Kernel
         path: |
           arch/arm64/boot/Image
           arch/arm64/boot/dts/qcom/*.dtb
